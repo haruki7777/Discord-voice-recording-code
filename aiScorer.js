@@ -17,22 +17,33 @@ function withTimeout(promise, ms = AI_TIMEOUT_MS) {
   };
 }
 
-function buildPrompt({ userId, score }) {
+function buildPrompt({ userId, localScore, referenceScore, finalScore, song }) {
+  const referenceText = referenceScore
+    ? `원곡 비교 점수: ${referenceScore.referenceTotal}/100\n` +
+      `피치 정확도: ${referenceScore.pitchAccuracy}/100\n` +
+      `피치 안정감: ${referenceScore.pitchStability}/100\n` +
+      `리듬: ${referenceScore.rhythm}/100\n` +
+      `멜로디 커버리지: ${referenceScore.melodyCoverage}/100\n` +
+      `중앙 피치 오차: ${referenceScore.medianPitchErrorCents} cents\n`
+    : '원곡 비교 데이터 없음\n';
+
   return `너는 디스코드 노래방 AI 심사위원 나츠미야.\n` +
     `유저 ID: ${userId}\n` +
-    `총점: ${score.total}/100\n` +
-    `음정 안정감: ${score.pitchStability}/100\n` +
-    `성량: ${score.volumeScore}/100\n` +
-    `성량 유지력: ${score.volumeConsistency}/100\n` +
-    `파워: ${score.powerScore}/100\n` +
-    `노래 길이: ${score.durationSeconds.toFixed(1)}초\n\n` +
-    `규칙:\n` +
+    `곡: ${song?.title || '알 수 없음'}\n` +
+    `최종 점수: ${finalScore}/100\n` +
+    `기본 음성 점수: ${localScore.total}/100\n` +
+    `성량: ${localScore.volumeScore}/100\n` +
+    `성량 유지력: ${localScore.volumeConsistency}/100\n` +
+    `파워: ${localScore.powerScore}/100\n` +
+    `노래 길이: ${localScore.durationSeconds.toFixed(1)}초\n` +
+    referenceText +
+    `\n규칙:\n` +
     `- 한국어로 말해.\n` +
-    `- 디스코드에 바로 올릴 짧은 평가를 해.\n` +
-    `- 장난스럽지만 너무 무례하지 않게 해.\n` +
-    `- 1줄 피드백과 1줄 개선 팁을 줘.\n` +
-    `- 점수는 이미 계산되어 있으니 바꾸지 마.\n` +
-    `- 250자 이하로 답해.`;
+    `- 최종 점수는 바꾸지 마.\n` +
+    `- 원곡 비교 결과를 반영해서 평가해.\n` +
+    `- 1줄 총평, 1줄 개선 팁을 줘.\n` +
+    `- 츤데레 느낌은 살짝만 넣어.\n` +
+    `- 300자 이하로 답해.`;
 }
 
 async function callOpenAI(prompt) {
@@ -50,7 +61,7 @@ async function callOpenAI(prompt) {
         { role: 'user', content: prompt },
       ],
       temperature: 0.8,
-      max_tokens: 220,
+      max_tokens: 260,
     }),
   });
 
@@ -70,7 +81,7 @@ async function callGemini(prompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.8, maxOutputTokens: 220 },
+      generationConfig: { temperature: 0.8, maxOutputTokens: 260 },
     }),
   });
 
@@ -92,7 +103,7 @@ async function callClaude(prompt) {
     },
     body: JSON.stringify({
       model: process.env.CLAUDE_MODEL || 'claude-3-5-haiku-latest',
-      max_tokens: 220,
+      max_tokens: 260,
       temperature: 0.8,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -105,19 +116,19 @@ async function callClaude(prompt) {
   return json.content?.map((part) => part.text).join('').trim();
 }
 
-export async function judgeWithAI({ userId, score, fallbackComment }) {
+export async function judgeWithAI({ userId, score, localScore, referenceScore, finalScore, song, fallbackComment }) {
   const providers = enabledProviders();
-  if (!providers.length) {
-    return { provider: 'local', comment: fallbackComment };
-  }
+  if (!providers.length) return { provider: 'local', comment: fallbackComment };
 
-  const prompt = buildPrompt({ userId, score });
-  const calls = {
-    openai: callOpenAI,
-    gemini: callGemini,
-    claude: callClaude,
-  };
+  const prompt = buildPrompt({
+    userId,
+    localScore: localScore || score,
+    referenceScore,
+    finalScore: finalScore ?? score?.total ?? 0,
+    song,
+  });
 
+  const calls = { openai: callOpenAI, gemini: callGemini, claude: callClaude };
   for (const provider of providers) {
     try {
       const comment = await calls[provider](prompt);
@@ -126,7 +137,6 @@ export async function judgeWithAI({ userId, score, fallbackComment }) {
       console.warn(`[AI scorer] ${provider} skipped:`, error.message);
     }
   }
-
   return { provider: 'local', comment: fallbackComment };
 }
 
