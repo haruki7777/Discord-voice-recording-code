@@ -12,6 +12,7 @@ import { EndBehaviorType, getVoiceConnection, joinVoiceChannel } from '@discordj
 import prism from 'prism-media';
 import fs from 'node:fs';
 import { PassThrough, pipeline } from 'node:stream';
+import { getEnabledAiProviderNames, judgeWithAI } from './aiScorer.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
@@ -133,11 +134,14 @@ function getAiComment(score) {
 }
 
 function createPanel() {
+  const providers = getEnabledAiProviderNames();
+  const providerText = providers.length ? providers.join(', ') : 'local only';
   const embed = new EmbedBuilder()
     .setTitle('🦊 나츠미 노래방 AI 채점')
     .setDescription('음성방에서 노래하면 나츠미가 음정 안정감, 성량, 지속력을 기준으로 점수를 매겨줄게.')
     .addFields(
       { name: '사용법', value: '1. 음성채널 입장\n2. 시작 버튼 클릭\n3. 노래 부르기\n4. 종료 또는 채점 버튼 클릭' },
+      { name: 'AI 평가', value: `사용 가능 API: ${providerText}` },
       { name: '주의', value: '녹음/분석이 진행될 수 있으니 참여자 동의를 받고 사용해줘.' },
     )
     .setColor(0xff9f43);
@@ -241,35 +245,45 @@ async function showScores(interaction) {
     return interaction.reply({ content: '아직 채점할 노래 데이터가 없어. 먼저 시작 버튼 누르고 노래해줘.', ephemeral: true });
   }
 
+  await interaction.deferReply();
+
   const results = [...session.userStats.entries()]
     .map(([userId, stats]) => ({ userId, stats, score: scoreStats(stats) }))
     .filter((result) => result.score.durationSeconds >= 1)
     .sort((a, b) => b.score.total - a.score.total);
 
   if (!results.length) {
-    return interaction.reply({ content: '노래가 너무 짧아. 최소 1초 이상은 불러줘야 점수를 낼 수 있어.', ephemeral: true });
+    return interaction.editReply({ content: '노래가 너무 짧아. 최소 1초 이상은 불러줘야 점수를 낼 수 있어.' });
   }
 
-  const description = results
-    .slice(0, 10)
+  const judgedResults = [];
+  for (const result of results.slice(0, 10)) {
+    const fallbackComment = getAiComment(result.score);
+    const ai = await judgeWithAI({ userId: result.userId, score: result.score, fallbackComment });
+    judgedResults.push({ ...result, ai });
+  }
+
+  const description = judgedResults
     .map((result, index) => {
       const rank = index + 1;
-      const { userId, score } = result;
+      const { userId, score, ai } = result;
       return [
         `**${rank}위** <@${userId}> — **${score.total}점**`,
         `음정 안정 ${score.pitchStability} / 성량 ${score.volumeScore} / 유지력 ${score.volumeConsistency}`,
-        `💬 ${getAiComment(score)}`,
+        `💬 [${ai.provider}] ${ai.comment}`,
       ].join('\n');
     })
     .join('\n\n');
 
+  const providers = getEnabledAiProviderNames();
+  const providerText = providers.length ? providers.join(', ') : 'local';
   const embed = new EmbedBuilder()
     .setTitle('🏆 나츠미 AI 노래 채점 결과')
     .setDescription(description)
-    .setFooter({ text: '참고: 기준곡 없이 음성 안정감/성량/지속력으로 계산하는 기본 채점 엔진입니다.' })
+    .setFooter({ text: `AI provider fallback order: ${providerText}` })
     .setColor(0xfeca57);
 
-  return interaction.reply({ embeds: [embed] });
+  return interaction.editReply({ embeds: [embed] });
 }
 
 async function stopKaraoke(interaction) {
@@ -297,6 +311,8 @@ async function resetKaraoke(interaction) {
 
 client.once('ready', () => {
   console.log(`Logged in as ${client.user?.tag}`);
+  const providers = getEnabledAiProviderNames();
+  console.log(`AI providers enabled: ${providers.length ? providers.join(', ') : 'local only'}`);
 });
 
 client.on('interactionCreate', async (interaction) => {
