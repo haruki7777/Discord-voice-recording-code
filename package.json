@@ -1,7 +1,7 @@
 {
   "name": "discord-voice-recording-code",
-  "version": "1.0.0",
-  "description": "Discord voice recording and karaoke scoring bot example",
+  "version": "1.1.0",
+  "description": "Discord karaoke scoring bot with voice recording, reference melody scoring, AI judging, and canvas score cards",
   "type": "module",
   "main": "index.js",
   "scripts": {
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@discordjs/voice": "latest",
+    "@napi-rs/canvas": "latest",
     "discord.js": "latest",
     "dotenv": "latest",
     "prism-media": "latest"
