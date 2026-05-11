@@ -1,30 +1,57 @@
 # Discord Voice Recording Code
 
-Discord.js v14 and @discordjs/voice example for recording audio from a Discord voice channel.
+Discord.js v14 voice recording example expanded into a karaoke AI scoring bot.
 
-## Files
+## Features
 
-- `index.js`: basic voice recording bot example
-- `recordings/`: generated audio files are saved here when the bot runs
+- `/karaoke-setup` creates the scoring button panel.
+- Start, score, stop, and reset buttons are included.
+- The bot records voice chunks as Ogg files.
+- Local scoring uses loudness, stability, power, and duration.
+- AI judging supports OpenAI, Gemini, and Claude.
+- Missing API tokens are ignored automatically.
 
 ## Install
 
 ```bash
-npm install discord.js @discordjs/voice prism-media
+npm install
 ```
 
-Node.js 18 or newer is recommended.
+## Environment variables
 
-## How it works
+Required:
 
-1. Run a slash command named `/record`.
-2. The bot joins the voice channel you are currently in.
-3. When a user starts speaking, the bot subscribes to that user's Opus audio stream.
-4. The stream is wrapped as Ogg audio through prism-media.
-5. The result is saved as `.ogg` inside the `recordings` folder.
+```env
+DISCORD_TOKEN=your_discord_bot_token
+CLIENT_ID=your_discord_application_id
+GUILD_ID=your_test_server_id
+```
 
-## Important
+Optional AI keys:
 
-- The bot must have permission to view and connect to the voice channel.
-- `selfDeaf` must be `false`, otherwise the bot cannot receive voice audio.
-- Always notify users and get consent before recording voice audio.
+```env
+OPENAI_API_KEY=optional
+GEMINI_API_KEY=optional
+ANTHROPIC_API_KEY=optional
+```
+
+Optional models:
+
+```env
+OPENAI_MODEL=gpt-4o-mini
+GEMINI_MODEL=gemini-1.5-flash
+CLAUDE_MODEL=claude-3-5-haiku-latest
+```
+
+## Run
+
+```bash
+npm run deploy
+npm start
+```
+
+## Notes
+
+If no AI key exists, the bot uses local comments instead. If one provider fails, the next available provider is tried.
+
+Always notify users and get consent before recording or analyzing voice audio.
