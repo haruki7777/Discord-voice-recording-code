@@ -4,11 +4,17 @@ import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.
 const commands = [
   new SlashCommandBuilder()
     .setName('karaoke-setup')
-    .setDescription('노래방 AI 채점 패널을 현재 채널에 설치합니다.')
+    .setDescription('원곡 비교 노래방 AI 채점 패널을 현재 채널에 설치합니다.')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
     .setName('record')
-    .setDescription('내가 들어간 음성채널에서 바로 노래방 AI 채점을 시작합니다.'),
+    .setDescription('내가 들어간 음성채널에서 원곡 비교 노래방 AI 채점을 시작합니다.')
+    .addStringOption((option) =>
+      option
+        .setName('song')
+        .setDescription('기준곡 ID입니다. 기본값은 scale_practice 입니다.')
+        .setRequired(false),
+    ),
 ].map((command) => command.toJSON());
 
 const token = process.env.DISCORD_TOKEN;
